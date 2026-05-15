@@ -1,0 +1,10 @@
+{
+  "id": "recording-transcript-player",
+  "name": "Recording Transcript Player",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Play recordings with synchronized sibling SRT, VTT and DOTe transcripts.",
+  "author": "Evgeniy Branitsky",
+  "authorUrl": "https://github.com/Galeas",
+  "isDesktopOnly": false
+}
