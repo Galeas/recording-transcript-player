@@ -91,7 +91,15 @@ export class RecordingTranscriptPlayerView extends FileView {
       return { cues: [], skippedBlocks: 0, subtitleFile: undefined, state: "missing" };
     }
 
-    const source = await this.app.vault.cachedRead(subtitleFile);
+    let source: string;
+    try {
+      source = await this.app.vault.cachedRead(subtitleFile);
+    } catch (error) {
+      console.error("Recording Transcript Player: failed to read subtitle file", error);
+      this.setStatus(`Could not read ${subtitleFile.name}`);
+      return { cues: [], skippedBlocks: 0, subtitleFile, state: "empty" };
+    }
+
     const parsed = parseSubtitleSource(source, subtitleFile.extension);
     const skippedMessage = parsed.skippedBlocks > 0 ? `, skipped ${parsed.skippedBlocks}` : "";
     this.setStatus(`${subtitleFile.name}${skippedMessage}`);

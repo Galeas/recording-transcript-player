@@ -37,7 +37,9 @@ export default class RecordingTranscriptPlayerPlugin extends Plugin {
         }
 
         if (!checking) {
-          void this.openRecording(file);
+          this.openRecording(file).catch((error) =>
+            console.error("Recording Transcript Player: openRecording failed", error)
+          );
         }
         return true;
       }
@@ -50,7 +52,11 @@ export default class RecordingTranscriptPlayerPlugin extends Plugin {
             item
               .setTitle("Open recording with transcript")
               .setIcon("file-audio")
-              .onClick(() => void this.openRecording(file));
+              .onClick(() =>
+                this.openRecording(file).catch((error) =>
+                  console.error("Recording Transcript Player: openRecording failed", error)
+                )
+              );
           });
         }
       })
@@ -58,7 +64,9 @@ export default class RecordingTranscriptPlayerPlugin extends Plugin {
 
     this.registerEvent(
       this.app.workspace.on("file-open", (file: TFile | null) => {
-        void this.maybeOpenMatchedRecordingInPluginView(file);
+        this.maybeOpenMatchedRecordingInPluginView(file).catch((error) =>
+          console.error("Recording Transcript Player: auto-open failed", error)
+        );
       })
     );
 
@@ -95,7 +103,7 @@ export default class RecordingTranscriptPlayerPlugin extends Plugin {
       return;
     }
 
-    const leaf = this.app.workspace.activeLeaf;
+    const leaf = this.app.workspace.getMostRecentLeaf();
     if (!leaf) {
       return;
     }
@@ -144,11 +152,7 @@ export default class RecordingTranscriptPlayerPlugin extends Plugin {
     this.isAutoOpening = true;
     try {
       const replacementLeaf = this.app.workspace.getLeaf("tab");
-      await replacementLeaf.setViewState({
-        type: "audio",
-        state: { file: file.path },
-        active: true
-      });
+      await replacementLeaf.openFile(file, { active: true });
       leaf.detach();
     } finally {
       this.isAutoOpening = false;
