@@ -73,10 +73,6 @@ export default class RecordingTranscriptPlayerPlugin extends Plugin {
     this.addSettingTab(new RecordingTranscriptPlayerSettingTab(this.app, this));
   }
 
-  onunload(): void {
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_RECORDING_TRANSCRIPT_PLAYER);
-  }
-
   async openRecording(file: TFile): Promise<void> {
     if (!this.isSupportedAudioFile(file)) {
       new Notice("Recording Transcript Player only opens supported audio files.");

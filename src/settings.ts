@@ -11,7 +11,7 @@ export class RecordingTranscriptPlayerSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Recording Transcript Player" });
+    new Setting(containerEl).setName("Recording Transcript Player").setHeading();
 
     new Setting(containerEl)
       .setName("Subtitle extension priority")
