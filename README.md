@@ -30,16 +30,16 @@ m4a, mp3, wav, aac, flac, ogg, opus
 
 ## Matching Rules
 
-The plugin only checks sibling subtitle files with the same basename as the audio file. By default it checks `.srt`, `.vtt`, then `.json`; the extension priority can be changed in settings.
+The plugin only checks sibling subtitle files with the same basename as the audio file. By default, it checks `.srt`, `.vtt`, then `.json`; the extension priority can be changed in settings.
 
-If no matching subtitle file is found, the audio player still opens and the transcript area shows an audio-only state.
+If no matching subtitle file is found, the audio player still opens, and the transcript area shows as audio-only.
 
 ## Search
 
-While the plugin view is focused, press `Cmd+F` (`Ctrl+F` on Windows/Linux) to open the in-transcript search bar. The query is matched as a case-insensitive substring against both speaker labels and cue text. All matches are highlighted inline and a counter (`current/total`) is shown.
+While the plugin view is focused, press `Cmd+F` (`Ctrl+F` on Windows/Linux) to open the in-transcript search bar. The query is matched as a case-insensitive substring against both speaker labels and cue text. All matches are highlighted inline, and a counter (`current/total`) is shown.
 
 - `Enter` jumps to the next match, `Shift+Enter` jumps to the previous one
-- The current match is highlighted in the accent color and auto-scrolled into view
+- The current match is highlighted in the accent colour and auto-scrolled into view
 - `Esc` (or the close button) clears the query and hides the bar
 
 Search does not seek audio. Clicking a cue's timestamp still seeks playback as before.
@@ -51,7 +51,7 @@ Search does not seek audio. Clicking a cue's timestamp still seeks playback as b
 - Auto-scroll transcript
 - Resume playback
 - Open matched recordings in the plugin view
-- Fall back to default media view when no subtitle (sub-option)
+- Fall back to the default media view when no subtitle (sub-option)
 - Save position interval
 
 Playback progress is saved per vault-relative audio path. Saved positions in the final 10 seconds of a recording are not restored.
