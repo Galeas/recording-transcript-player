@@ -2,6 +2,8 @@
 
 Recording Transcript Player is an Obsidian plugin for opening audio files with a synchronized sibling SRT transcript.
 
+<img width="800" height="610" alt="recording-transcript-player-screenshot" src="https://github.com/user-attachments/assets/4e7e9bd0-10d0-4796-890b-9a75d2485f1d" />
+
 ## Usage
 
 Place an `.srt`, `.vtt`, or DOTe `.json` file beside an audio file with the exact same basename:
