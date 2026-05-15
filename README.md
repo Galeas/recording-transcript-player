@@ -1,3 +1,4 @@
+[![Release](https://github.com/Galeas/recording-transcript-player/actions/workflows/release.yml/badge.svg)](https://github.com/Galeas/recording-transcript-player/actions/workflows/release.yml)
 # Recording Transcript Player
 
 Recording Transcript Player is an Obsidian plugin for opening audio files with a synchronized sibling SRT transcript.
