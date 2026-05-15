@@ -4,6 +4,7 @@ import type RecordingTranscriptPlayerPlugin from "./main";
 import { shouldRestorePlaybackPosition } from "./playback-position";
 import { getSubtitleCandidates } from "./subtitle-resolution";
 import { TranscriptCue, countActiveCues, findActiveCue, parseSubtitleSource } from "./srt";
+import { TranscriptMatch, findMatches } from "./transcript-search";
 
 export const VIEW_TYPE_RECORDING_TRANSCRIPT_PLAYER = "recording-transcript-player-view";
 
@@ -13,11 +14,17 @@ export class RecordingTranscriptPlayerView extends FileView {
   private autoScroll = true;
   private cleanupController?: AbortController;
   private cueElements = new Map<number, HTMLElement>();
+  private cueRenders = new Map<number, CueRender>();
   private cues: TranscriptCue[] = [];
   private lastSavedAt = 0;
   private statusEl?: HTMLElement;
   private timeEl?: HTMLElement;
   private cueCountEl?: HTMLElement;
+  private searchBarEl?: HTMLElement;
+  private searchInputEl?: HTMLInputElement;
+  private searchCounterEl?: HTMLElement;
+  private searchMatches: TranscriptMatch[] = [];
+  private currentMatchIndex = -1;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: RecordingTranscriptPlayerPlugin) {
     super(leaf);
@@ -68,11 +75,14 @@ export class RecordingTranscriptPlayerView extends FileView {
     autoScrollCheckbox.checked = this.autoScroll;
     autoScrollSetting.createEl("span", { text: "Auto-scroll" });
 
+    this.buildSearchBar(shell);
+
     const transcriptEl = shell.createDiv({ cls: "rtp-transcript" });
     const transcriptResult = await this.loadTranscript(file);
     this.cues = transcriptResult.cues;
     this.renderTranscript(transcriptEl, transcriptResult);
     this.bindAudioEvents(file, autoScrollCheckbox);
+    this.bindSearchKeyboardShortcuts();
   }
 
   async onUnloadFile(file: TFile): Promise<void> {
@@ -80,7 +90,13 @@ export class RecordingTranscriptPlayerView extends FileView {
     this.cleanup();
     this.cues = [];
     this.cueElements.clear();
+    this.cueRenders.clear();
     this.activeCueEl = undefined;
+    this.searchMatches = [];
+    this.currentMatchIndex = -1;
+    this.searchBarEl = undefined;
+    this.searchInputEl = undefined;
+    this.searchCounterEl = undefined;
     await super.onUnloadFile(file);
   }
 
@@ -123,6 +139,7 @@ export class RecordingTranscriptPlayerView extends FileView {
 
   private renderTranscript(transcriptEl: HTMLElement, result: TranscriptLoadResult): void {
     this.cueElements.clear();
+    this.cueRenders.clear();
     this.setCueCount(0, 0);
 
     if (result.state === "missing") {
@@ -142,7 +159,7 @@ export class RecordingTranscriptPlayerView extends FileView {
     }
 
     this.setCueCount(0, result.cues.length);
-    for (const cue of result.cues) {
+    result.cues.forEach((cue, cueIndex) => {
       const row = transcriptEl.createDiv({ cls: "rtp-cue" });
       const button = row.createEl("button", {
         cls: "rtp-timestamp",
@@ -150,12 +167,11 @@ export class RecordingTranscriptPlayerView extends FileView {
         attr: { type: "button" }
       });
       const body = row.createDiv({ cls: "rtp-cue-body" });
+      let speakerEl: HTMLElement | undefined;
       if (cue.speaker) {
-        body.createDiv({ cls: "rtp-speaker", text: cue.speaker });
+        speakerEl = body.createDiv({ cls: "rtp-speaker", text: cue.speaker });
       }
-      for (const line of cue.text.split("\n")) {
-        body.createDiv({ cls: "rtp-text", text: line });
-      }
+      const textEl = body.createDiv({ cls: "rtp-text", text: cue.text });
 
       button.addEventListener("click", () => {
         if (this.audioEl) {
@@ -164,7 +180,8 @@ export class RecordingTranscriptPlayerView extends FileView {
         }
       });
       this.cueElements.set(cue.index, row);
-    }
+      this.cueRenders.set(cueIndex, { cue, textEl, speakerEl });
+    });
   }
 
   private bindAudioEvents(file: TFile, autoScrollCheckbox: HTMLInputElement): void {
@@ -294,6 +311,202 @@ export class RecordingTranscriptPlayerView extends FileView {
     this.cleanupController?.abort();
     this.cleanupController = undefined;
   }
+
+  private buildSearchBar(parent: HTMLElement): void {
+    const bar = parent.createDiv({ cls: "rtp-search-bar is-hidden" });
+    const input = bar.createEl("input", {
+      cls: "rtp-search-input",
+      attr: { type: "text", placeholder: "Search transcript…", spellcheck: "false" }
+    });
+    const counter = bar.createSpan({ cls: "rtp-search-counter", text: "" });
+    const prevBtn = bar.createEl("button", {
+      cls: "rtp-search-nav",
+      attr: { type: "button", "aria-label": "Previous match" }
+    });
+    prevBtn.setText("▲");
+    const nextBtn = bar.createEl("button", {
+      cls: "rtp-search-nav",
+      attr: { type: "button", "aria-label": "Next match" }
+    });
+    nextBtn.setText("▼");
+    const closeBtn = bar.createEl("button", {
+      cls: "rtp-search-close",
+      attr: { type: "button", "aria-label": "Close search" }
+    });
+    closeBtn.setText("✕");
+
+    this.searchBarEl = bar;
+    this.searchInputEl = input;
+    this.searchCounterEl = counter;
+
+    input.addEventListener("input", () => this.updateSearch(input.value));
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.hideSearch();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        this.navigateMatch(event.shiftKey ? -1 : 1);
+      }
+    });
+    prevBtn.addEventListener("click", () => this.navigateMatch(-1));
+    nextBtn.addEventListener("click", () => this.navigateMatch(1));
+    closeBtn.addEventListener("click", () => this.hideSearch());
+  }
+
+  private bindSearchKeyboardShortcuts(): void {
+    if (!this.cleanupController) {
+      return;
+    }
+    const options = { signal: this.cleanupController.signal };
+    this.contentEl.addEventListener(
+      "keydown",
+      (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+          event.preventDefault();
+          this.showSearch();
+        }
+      },
+      options
+    );
+  }
+
+  private showSearch(): void {
+    if (!this.searchBarEl || !this.searchInputEl) {
+      return;
+    }
+    this.searchBarEl.removeClass("is-hidden");
+    this.searchInputEl.focus();
+    this.searchInputEl.select();
+  }
+
+  private hideSearch(): void {
+    if (!this.searchBarEl || !this.searchInputEl) {
+      return;
+    }
+    this.searchBarEl.addClass("is-hidden");
+    this.searchInputEl.value = "";
+    this.updateSearch("");
+  }
+
+  private updateSearch(query: string): void {
+    this.searchMatches = findMatches(this.cues, query);
+    this.currentMatchIndex = this.searchMatches.length > 0 ? 0 : -1;
+    this.applySearchHighlights();
+    this.updateSearchCounter();
+    this.scrollCurrentMatchIntoView();
+  }
+
+  private navigateMatch(direction: 1 | -1): void {
+    if (this.searchMatches.length === 0) {
+      return;
+    }
+    const total = this.searchMatches.length;
+    this.currentMatchIndex = (this.currentMatchIndex + direction + total) % total;
+    this.applySearchHighlights();
+    this.updateSearchCounter();
+    this.scrollCurrentMatchIntoView();
+  }
+
+  private applySearchHighlights(): void {
+    const byCueField = new Map<string, { ranges: Range[]; currentOffset: number }>();
+    this.searchMatches.forEach((match, globalIndex) => {
+      const key = `${match.cueIndex}:${match.field}`;
+      let entry = byCueField.get(key);
+      if (!entry) {
+        entry = { ranges: [], currentOffset: -1 };
+        byCueField.set(key, entry);
+      }
+      if (globalIndex === this.currentMatchIndex) {
+        entry.currentOffset = entry.ranges.length;
+      }
+      entry.ranges.push({ start: match.start, end: match.end });
+    });
+
+    this.cueRenders.forEach((render, cueIndex) => {
+      const textEntry = byCueField.get(`${cueIndex}:text`);
+      this.renderHighlightedText(
+        render.textEl,
+        render.cue.text,
+        textEntry?.ranges ?? [],
+        textEntry?.currentOffset ?? -1
+      );
+      if (render.speakerEl && render.cue.speaker) {
+        const speakerEntry = byCueField.get(`${cueIndex}:speaker`);
+        this.renderHighlightedText(
+          render.speakerEl,
+          render.cue.speaker,
+          speakerEntry?.ranges ?? [],
+          speakerEntry?.currentOffset ?? -1
+        );
+      }
+    });
+  }
+
+  private renderHighlightedText(
+    element: HTMLElement,
+    source: string,
+    ranges: Range[],
+    currentRangeIndex: number
+  ): void {
+    element.empty();
+    if (ranges.length === 0) {
+      element.setText(source);
+      return;
+    }
+    let cursor = 0;
+    ranges.forEach((range, rangeIndex) => {
+      if (range.start > cursor) {
+        element.appendText(source.slice(cursor, range.start));
+      }
+      const span = element.createSpan({ cls: "rtp-match-highlight" });
+      if (rangeIndex === currentRangeIndex) {
+        span.addClass("is-current");
+      }
+      span.setText(source.slice(range.start, range.end));
+      cursor = range.end;
+    });
+    if (cursor < source.length) {
+      element.appendText(source.slice(cursor));
+    }
+  }
+
+  private updateSearchCounter(): void {
+    if (!this.searchCounterEl) {
+      return;
+    }
+    const total = this.searchMatches.length;
+    if (total === 0) {
+      this.searchCounterEl.setText(this.searchInputEl?.value.trim() ? "0/0" : "");
+    } else {
+      this.searchCounterEl.setText(`${this.currentMatchIndex + 1}/${total}`);
+    }
+  }
+
+  private scrollCurrentMatchIntoView(): void {
+    if (this.currentMatchIndex < 0) {
+      return;
+    }
+    const match = this.searchMatches[this.currentMatchIndex];
+    const render = this.cueRenders.get(match.cueIndex);
+    if (!render) {
+      return;
+    }
+    const fieldEl = match.field === "speaker" ? render.speakerEl : render.textEl;
+    const currentEl = fieldEl?.querySelector(".rtp-match-highlight.is-current");
+    (currentEl ?? render.textEl).scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+}
+
+interface CueRender {
+  cue: TranscriptCue;
+  textEl: HTMLElement;
+  speakerEl?: HTMLElement;
+}
+
+interface Range {
+  start: number;
+  end: number;
 }
 
 interface TranscriptLoadResult {

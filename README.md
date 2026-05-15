@@ -33,6 +33,16 @@ The plugin only checks sibling subtitle files with the same basename as the audi
 
 If no matching subtitle file is found, the audio player still opens and the transcript area shows an audio-only state.
 
+## Search
+
+While the plugin view is focused, press `Cmd+F` (`Ctrl+F` on Windows/Linux) to open the in-transcript search bar. The query is matched as a case-insensitive substring against both speaker labels and cue text. All matches are highlighted inline and a counter (`current/total`) is shown.
+
+- `Enter` jumps to the next match, `Shift+Enter` jumps to the previous one
+- The current match is highlighted in the accent color and auto-scrolled into view
+- `Esc` (or the close button) clears the query and hides the bar
+
+Search does not seek audio. Clicking a cue's timestamp still seeks playback as before.
+
 ## Settings
 
 - Subtitle extension priority
